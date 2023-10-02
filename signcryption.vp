@@ -1,0 +1,52 @@
+attacker [active]
+
+// initialization process
+principal KDS[
+    knows private x
+    generates parameters // generates system parameters
+    KDS_pub = G^x
+]
+//KDS-> SP: [public_IMD]
+principal SP [
+    knows public ID
+    generates t
+    SP_pub = G^t
+]
+
+//Partial private key extraction process.
+
+principal KDS[
+
+ Pkey = HASH(ID,x)// construction of partial private key
+]
+
+KDS -> SP:[Pkey] // submit partial private key to the system participants
+
+principal SP[
+    S_i = CONCAT(Pkey,t)// full private key 
+    P_i = CONCAT(Pkey,SP_pub) // full public key 
+    generates symKey // generates symmetric  key
+    generates timestamp// generates timestamp
+    ff = CONCAT(symKey,timestamp)
+    knows private meddata// knows message aka medical data
+    meddataencrypt = ENC(ff, meddata) // encrypt medical data  with symmetric key
+    meddatadecrypt = DEC(ff, meddataencrypt)
+    sig = SIGN(t, meddata)//Signed medical data
+    //sigvalid = SIGNVERIF(SP_pub, sig,meddata)? // verify the  signature
+    validsig = SIGNVERIF(G^t, meddata, SIGN(t, meddata))? // verify the  signature
+   
+
+]
+
+
+queries[
+	//equivalence? s, s_
+	confidentiality? meddata
+	freshness? ff
+    freshness? meddataencrypt
+    //freshness? meddata
+    authentication? KDS -> SP: [Pkey]
+]
+
+
+

@@ -1,0 +1,103 @@
+// SPDX-FileCopyrightText: © 2019-2022 Nadim Kobeissi <nadim@symbolic.software>
+// SPDX-License-Identifier: GPL-3.0-only
+
+attacker [active]
+
+// initialization process
+principal Kgc[
+    generates parameters // generates security parameter
+    params = G^parameters // publish params to the public
+    knows private a // private key or secret key
+    Kgc_public = G^a  
+]
+
+//Participants key generation process -> Each participant generates its private and public key pair
+// NB:  The partipants  consists of doctor and the patient.
+// D_keyGen
+principal Doctor[
+    knows private y
+    D_keygen = G^y
+    generates DID // DID refers to doctor's identity
+    ff= CONCAT(DID,D_keygen)
+]
+Doctor -> kgc: DID, ff
+
+
+//P_keyGen
+principal Patient[
+    knows private z
+    P_keygen = G^z
+    generates PID  // DID refers to doctor's identity
+    MM = CONCAT(PID,P_keygen)
+]
+Patient -> kgc : PID, MM
+
+//partial private key extraction process
+principal kgc[ 
+    knows private s // secret value
+    state_info = G^s
+    d_D = HASH(a,state_info,ff)  // Doctor's partial private key
+    d_P = HASH(a,state_info,MM ) // Patient's partial private key
+]
+kgc -> Patient : [d_P], state_info // submit partial private key to Patient
+kgc -> Doctor :  [d_D], state_info //  submit partial private key to Doctor
+
+//Key setup process
+// Patient's key  setup process
+principal Patient [
+    P_priv = HASH(z,d_P) // Private key setup
+    P_pub =  CONCAT(P_keyGen, d_P)  // Public key setup
+]
+
+// Doctor's key  setup process
+principal Doctor [
+    D_priv = HASH(y,d_D) // Private key setup
+    D_pub = CONCAT(D_keygen, d_D) // Public key setup
+]
+
+//Perform Encapsulation steps
+principal Patient[
+    generates u
+    cP = G^u
+    c1P = HASH(z,d_P,cP)
+    c2P = HASH(u,P_keyGen)
+    K_1 = HASH(u,P_keyGen, state_info, MM)
+    generates m1
+    m1hash = HASH(m1)
+    cipherP = CONCAT(cP,c1P,c2P) // 
+    cenc_k1 = AEAD_ENC(K_1, m1hash, cipherP)
+    encap_A = AEAD_ENC(PID,P_pub, cenc_k1)
+]
+Patient -> Doctor : [encap_A], [cenc_k1] , [K_1], [m1hash]// transmisssion of encapsulated cipher, message hash to doctor
+
+principal Doctor[
+     knows private x
+     cD = G^x
+     c1D = HASH(y,d_D,cD)
+     c2D = HASH(y,D_keyGen)
+     K_2 = HASH(x,D_keyGen, state_info, ff)
+    cipherD = CONCAT(cD,c1D,c2D) // 
+    cenc_k2 = ENC(K_2, cipherD)
+    encap_B = AEAD_ENC(DID,D_pub, cenc_k2)
+]
+Doctor -> Patient : [encap_B], [cenc_k2], [K_2]
+
+principal Doctor [
+    cenc_k1decrypt = AEAD_DEC(K_1,cenc_k1,m1hash)
+    K_1decrypt = AEAD_DEC(K_1, cenc_k1, cenc_k1decrypt)
+]
+
+principal Patient [
+    cenc_k2decrypt = DEC(K_2,cenc_k2)
+    K_2decrypt = AEAD_DEC(K_2, encap_B, cenc_k2decrypt)
+
+]
+
+queries[
+    confidentiality?m1
+    freshness? m1hash
+    authentication? Patient-> Doctor : K_1
+    authentication? Doctor-> Patient: K_2
+
+]
+

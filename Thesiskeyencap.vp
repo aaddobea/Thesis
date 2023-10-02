@@ -1,0 +1,39 @@
+// SPDX-FileCopyrightText: © 2019-2022 Nadim Kobeissi <nadim@symbolic.software>
+// SPDX-License-Identifier: GPL-3.0-only
+
+attacker[active]
+
+principal Patient[
+    knows private p
+    p_public = G^p
+]
+principal Doctor[
+    knows private d
+    d_public = G^d
+]
+
+Patient -> Doctor   : [p_public]
+Doctor   -> Patient : [d_public]
+
+principal patient[
+    generates medicaldata
+    secret         = d_public^p
+    key        = HASH(secret)
+    encap_ciphertext = ENC(key, medicaldata)
+    tag        = MAC(key, encap_ciphertext)
+]
+
+Patient -> Doctor: encap_ciphertext, tag
+
+principal Doctor[
+    secret_        = p_public^d
+    key_       = HASH(secret_) 
+    _          = ASSERT(tag, MAC(key_, encap_ciphertext))?
+    medicaldata_ = DEC(key_, encap_ciphertext)
+]
+
+queries[
+    confidentiality?medicaldata
+    authentication? Patient-> Doctor : encap_ciphertext
+]
+
